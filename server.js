@@ -1,5 +1,4 @@
 const express = require('express')
-const Sequelize = require('sequelize')
 const db = require('./models/index')
 const { rsvp } = require('./models')
 
@@ -34,28 +33,47 @@ app.get('/lol', (req, res)=>{
     res.redirect('https://www.youtube.com/watch?v=a3Z7zEc7AXQ')
 })
 
-app.get('/', (req, res)=>{
 
-    res.status(402).redirect('/lol')
-})
+
 
 app.get('/api/get/fishtank/:id', async (req, res)=>{
     const fishtanks = ['1','2','3','4']
-    
-    const reservations = await rsvp.findAll({where:{ fishtank:req.params.id}})
+    try {
+        const reservations = await rsvp.findAll({where:{ fishtank:req.params.id}})
+    } catch (error) {
+        console.log(error)
+    }
 
 
     res.send(reservations)
 })
 
+
+
+
+
 app.post('/api/post/rsvp', async (req, res)=> {
     try {
         const reservation = await db.rsvp.create({ name: req.body.name, wallet:req.body.wallet, hash:req.body.hash, fishtank:req.body.fishtank, start:req.body.start, end:req.body.end})
     } catch (error) {
-        
+        console.log(error)
     }
     
     res.sendStatus(200)
+})
+
+
+
+
+// Solana pay
+
+app.get('/', (req, res)=>{
+    const icon = 'http://' + req.headers.host + '/label'
+    res.send({"label":"Fishtanks Reservations", "icon":icon})
+})
+
+app.get('/label', (req, res)=>{
+    res.sendFile(__dirname + '/files/icon.svg')
 })
 
 
