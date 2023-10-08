@@ -182,6 +182,11 @@ async function createSplTransferIx(sender, connection) {
 
 
 
+// TODO: Checkout calculatibng and calculateCheckoutAmount(), reservation handeling
+// maybe periods instaed of times?
+
+
+
 
 
 db.sequelize.sync({ alter: true}).then(()=>{
