@@ -77,6 +77,10 @@ app.post('/api/post/rsvp', async (req, res)=> {
 })
 
 
+app.post('/checkout')
+
+
+
 
 
 // Solana pay
