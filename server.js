@@ -63,7 +63,16 @@ app.get('/api/get/fishtank/:id', async (req, res)=>{
 })
 
 
+app.post('/api/post/checkout/:id',  async (req, res)=>{
+    let fishtank = req.query.tank
+    let period = req.query.period
+    let date = req.query.date
+    let new_date = new Date(date)
+    console.log(new_date)
+    if(!fishtank || !period || !date || !new_date){ return res.sendStatus(400)}
 
+    if(){}
+})
 
 
 app.post('/api/post/rsvp', async (req, res)=> {
@@ -180,7 +189,9 @@ async function createSplTransferIx(sender, connection) {
 
 
 
-
+async function  calculateCheckoutAmount() {
+    
+}
 
 // TODO: Checkout calculatibng and calculateCheckoutAmount(), reservation handeling
 // maybe periods instaed of times?
