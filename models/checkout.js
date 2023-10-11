@@ -5,8 +5,7 @@ module.exports = (sequelize, DataTypes) => {
 const checkout = sequelize.define('checkout', {
   // Model attributes are defined here
   checkoutId: {
-    type: DataTypes.STRING,
-    allowNull: false
+    type: DataTypes.UUIDV4
   },  
   fishtank: {
     type: DataTypes.STRING,

@@ -8,12 +8,19 @@ const { clusterApiUrl, Connection, Keypair, PublicKey, Transaction } = require('
 const BigNumber = require('bignumber.js')
 const { createTransferCheckedInstruction, getAccount, getAssociatedTokenAddress, getMint } = require('@solana/spl-token')
 const { TEN } = require('@solana/pay')
+const checkout = require('./models/checkout')
+
+
+// Coneection
+const cluster = 'Mainet beta';
+const endpoint = 'https://api.mainnet-beta.solana.com';
+const connection = new Connection(endpoint, 'singleGossip');
 
 
 //Token
-const splToken = new PublicKey('');
+const splToken = new PublicKey('DwWQHDiyLauoh3pUih7X6G1TrqQnAjgpZ1W7ufrJQcb9');
 //wallet
-const MERCHANT_WALLET = new PublicKey('');
+const MERCHANT_WALLET = new PublicKey('6NhgBfVm9imA1h6Kd8HabdbiRAXf77Xcxh189dHZHMwx');
 
 
 
@@ -71,7 +78,9 @@ app.post('/api/post/checkout/:id',  async (req, res)=>{
     console.log(new_date)
     if(!fishtank || !period || !date || !new_date){ return res.sendStatus(400)}
 
-    if(){}
+    if(new_date.getUTCMilliseconds() <= new Date.now()){ return res.sendStatus(400)}
+
+    res.sendStatus(200)
 })
 
 
@@ -111,6 +120,7 @@ app.post('/', async (req,res)=>{
     if (!accountField) throw new Error('missing account');
 
     const sender = new PublicKey(accountField);
+    console.log(sender)
 
     // create spl transfer instruction
     const splTransferIx = await createSplTransferIx(sender, connection);
@@ -189,8 +199,10 @@ async function createSplTransferIx(sender, connection) {
 
 
 
-async function  calculateCheckoutAmount() {
+async function calculateCheckoutAmount() {
+    let amount = new BigNumber(0.5)
     
+    return amount;
 }
 
 // TODO: Checkout calculatibng and calculateCheckoutAmount(), reservation handeling
@@ -199,8 +211,8 @@ async function  calculateCheckoutAmount() {
 
 
 
-
-db.sequelize.sync({ alter: true}).then(()=>{
+//  alter: true
+db.sequelize.sync({}).then(()=>{
     app.listen(3000, ()=>{
         console.log('http://localhost:3000')
     })
