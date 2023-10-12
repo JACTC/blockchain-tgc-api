@@ -6,23 +6,23 @@ const { rsvp } = require('./models')
 // Solana pay imports
 const { clusterApiUrl, Connection, Keypair, PublicKey, Transaction } = require('@solana/web3.js')
 const BigNumber = require('bignumber.js')
-const { createTransferCheckedInstruction, getAccount, getAssociatedTokenAddress, getMint } = require('@solana/spl-token')
+const { createTransferCheckedInstruction, getAccount, getAssociatedTokenAddress, getMint, getOrCreateAssociatedTokenAccount } = require('@solana/spl-token')
 const { TEN } = require('@solana/pay')
 const checkout = require('./models/checkout')
 
 
 // Coneection
-const cluster = 'Mainet beta';
-const endpoint = 'https://api.mainnet-beta.solana.com';
-const connection = new Connection(endpoint, 'singleGossip');
+const cluster = 'mainnet-beta'
+const endpoint = clusterApiUrl(cluster);
+const connection = new Connection(endpoint, 'confirmed');
 
 
 //Token
 const splToken = new PublicKey('DwWQHDiyLauoh3pUih7X6G1TrqQnAjgpZ1W7ufrJQcb9');
 //wallet
-const MERCHANT_WALLET = new PublicKey('6NhgBfVm9imA1h6Kd8HabdbiRAXf77Xcxh189dHZHMwx');
+const MERCHANT_WALLET = new PublicKey('Annf2Hqk8xsfRQcGL3j4WRQXJhx4umM3uV4jv56qzWMK');
 
-
+// 6NhgBfVm9imA1h6Kd8HabdbiRAXf77Xcxh189dHZHMwx
 
 const app = express()
 
@@ -104,52 +104,76 @@ app.post('/checkout')
 // Solana pay
 
 app.get('/', (req, res)=>{
-    const icon = 'http://' + req.headers.host + '/label'
+    const icon = 'https://6618bp6f-3000.uks1.devtunnels.ms/label.svg'
     res.send({"label":"Fishtanks Reservations", "icon":icon})
 })
 
-app.get('/label', (req, res)=>{
+app.get('/label.svg', (req, res)=>{
     res.sendFile(__dirname + '/files/icon.svg')
 })
 
 
 
 app.post('/', async (req,res)=>{
+try {
+
+        
+        const reference = req.query.id.toString()
+        if(!reference) throw new Error('no reference')
+
+    
     // Account provided in the transaction request body by the wallet.
-    const accountField = req.body.account;
-    if (!accountField) throw new Error('missing account');
-
-    const sender = new PublicKey(accountField);
-    console.log(sender)
-
-    // create spl transfer instruction
-    const splTransferIx = await createSplTransferIx(sender, connection);
-
-    // create the transaction
-    const transaction = new Transaction();
-
-    // add the instruction to the transaction
-    transaction.add(splTransferIx);
-
-    // Serialize and return the unsigned transaction.
-    const serializedTransaction = transaction.serialize({
-        verifySignatures: false,
-        requireAllSignatures: false,
-    });
-
-    const base64Transaction = serializedTransaction.toString('base64');
-    const message = 'Thank you for your Reservation of a fishtank';
-
-    res.status(200).send({ transaction: base64Transaction, message });
+        const accountField = req.body.account;
+        if (!accountField) throw new Error('missing account');
+    
+        const sender = new PublicKey(accountField);
+        console.log(sender)
+    
+        // create spl transfer instruction
+    
+        const splTransferIx = await createSplTransferIx(sender);
+    
+    
+        splTransferIx.keys.push({
+            pubkey: new PublicKey(reference),
+            isSigner: false,
+            isWritable: false,
+          })
+        // create the transaction
+        const transaction = new Transaction();
+    
+        
+        // add the instruction to the transaction
+        transaction.add(splTransferIx);
+    
+        let blockhash = (await connection.getLatestBlockhash('finalized')).blockhash;
+        transaction.recentBlockhash = blockhash;
+        transaction.feePayer = MERCHANT_WALLET
+    
+    
+        // Serialize and return the unsigned transaction.
+        const serializedTransaction = transaction.serialize({
+            verifySignatures: false,
+            requireAllSignatures: false,
+        });
+    
+        const base64Transaction = serializedTransaction.toString('base64');
+        const message = 'Thank you for your Reservation of a fishtank';
+    
+        res.status(200).send({ transaction: base64Transaction, message });
+} catch (error) {
+    res.sendStatus(500)
+    console.log(error)
+}
 })
 
 
 
 
 
-async function createSplTransferIx(sender, connection) {
-    const senderInfo = await connection.getAccountInfo(sender);
-    if (!senderInfo) throw new Error('sender not found');
+async function createSplTransferIx(sender) {
+    //const senderInfo = await connection.getAccountInfo(sender);
+    //if (!senderInfo) throw new Error('sender not found');
 
     // Get the sender's ATA and check that the account exists and can send tokens
     const senderATA = await getAssociatedTokenAddress(splToken, sender);
@@ -170,19 +194,18 @@ async function createSplTransferIx(sender, connection) {
     // You should always calculate the order total on the server to prevent
     // people from directly manipulating the amount on the client
     let amount = calculateCheckoutAmount();
-    amount = amount.times(TEN.pow(mint.decimals)).integerValue(BigNumber.ROUND_FLOOR);
 
     // Check that the sender has enough tokens
-    const tokens = BigInt(String(amount));
-    if (tokens > senderAccount.amount) throw new Error('insufficient funds');
-
+    //const tokens = BigInt(String(amount));
+    //if (tokens > senderAccount.amount) throw new Error('insufficient funds');
+    if (amount.toString() > senderAccount.amount) throw new Error('insufficient funds');
     // Create an instruction to transfer SPL tokens, asserting the mint and decimals match
     const splTransferIx = createTransferCheckedInstruction(
         senderATA,
         splToken,
         merchantATA,
         sender,
-        tokens,
+        amount,
         mint.decimals
     );
 
@@ -199,14 +222,17 @@ async function createSplTransferIx(sender, connection) {
 
 
 
-async function calculateCheckoutAmount() {
-    let amount = new BigNumber(0.5)
+function calculateCheckoutAmount() {
+    let amount = 5
     
     return amount;
 }
 
 // TODO: Checkout calculatibng and calculateCheckoutAmount(), reservation handeling
 // maybe periods instaed of times?
+
+
+
 
 
 
