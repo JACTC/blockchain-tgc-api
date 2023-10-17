@@ -1,14 +1,16 @@
 const express = require('express')
 const db = require('./models/index')
 const { rsvp } = require('./models')
+const QRCode= require('qrcode')
 
 
 // Solana pay imports
 const { clusterApiUrl, Connection, Keypair, PublicKey, Transaction } = require('@solana/web3.js')
 const BigNumber = require('bignumber.js')
 const { createTransferCheckedInstruction, getAccount, getAssociatedTokenAddress, getMint, getOrCreateAssociatedTokenAccount } = require('@solana/spl-token')
-const { TEN } = require('@solana/pay')
-const checkout = require('./models/checkout')
+const { TEN, encodeURL, createQR } = require('@solana/pay')
+const { dirname } = require('path')
+
 
 
 // Coneection
@@ -70,6 +72,18 @@ app.get('/api/get/fishtank/:id', async (req, res)=>{
 })
 
 
+app.get('/files/qrcodes/:file', (req,res)=>{
+    try {
+        res.sendFile(__dirname +'/files/qrcodes/' + req.params.file) 
+    } catch (error) {
+     console.log(error)   
+     res.sendStatus(400)
+    }
+})
+
+
+
+
 app.post('/api/post/checkout/:id',  async (req, res)=>{
     let fishtank = req.query.tank
     let period = req.query.period
@@ -85,6 +99,7 @@ app.post('/api/post/checkout/:id',  async (req, res)=>{
 
 
 app.post('/api/post/rsvp', async (req, res)=> {
+
     try {
         const reservation = await db.rsvp.create({ name: req.body.name, wallet:req.body.wallet, hash:req.body.hash, fishtank:req.body.fishtank, start:req.body.start, end:req.body.end})
     } catch (error) {
@@ -95,16 +110,37 @@ app.post('/api/post/rsvp', async (req, res)=> {
 })
 
 
-app.post('/checkout')
+app.post('/api/post/checkout', async (req, res)=> {
+    
+    try {
+
+        let check_period_checkout = await db.checkout.findOne({ where: { period: req.body.period, fishtank: req.body.fishtank, date:req.body.date}})
+        let check_period_rsvp = await db.rsvp.findOne({ where: { period: req.body.period, fishtank: req.body.fishtank, date:req.body.date}})
+        if(check_period_checkout || check_period_rsvp){ return res.sendStatus(400); }
+
+        const checkout = await db.checkout.create({ fishtank:req.body.fishtank, date:req.body.date, period:req.body.period})
+
+        let url = encodeURL({link:'https://v57nr3jh-3000.uks1.devtunnels.ms/?id=' + checkout.checkoutId})
+
+       //let qr = createQR(url, 512, 'white', 'black').download(__dirname + '/files/qrcodes/' + checkout.checkoutId + '.svg')
+        QRCode.toFile(__dirname +'/files/qrcodes/' + checkout.checkoutId + '.png', url.href, { errorCorrectionLevel: 'M' })
 
 
+        res.send({ checkoutId:checkout.checkoutId, qr:'https://v57nr3jh-3000.uks1.devtunnels.ms' + '/files/qrcodes/' + checkout.checkoutId + '.png', url:url })
+    } catch (error) {
+        console.log(error)
+        res.sendStatus(500)
+    }
+    
+    
+})
 
 
 
 // Solana pay
 
 app.get('/', (req, res)=>{
-    const icon = 'https://6618bp6f-3000.uks1.devtunnels.ms/label.svg'
+    const icon = 'https://https://v57nr3jh-3000.uks1.devtunnels.ms/label.svg'
     res.send({"label":"Fishtanks Reservations", "icon":icon})
 })
 
@@ -238,7 +274,7 @@ function calculateCheckoutAmount() {
 
 
 //  alter: true
-db.sequelize.sync({}).then(()=>{
+db.sequelize.sync({force: true}).then(()=>{
     app.listen(3000, ()=>{
         console.log('http://localhost:3000')
     })

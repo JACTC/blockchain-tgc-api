@@ -20,12 +20,12 @@ const rsvp = sequelize.define('rsvp', {
     type: DataTypes.STRING,
     allowNull: false
   },  
-  start: {
-    type: DataTypes.DATE,
+  date: {
+    type: DataTypes.DATEONLY,
     allowNull: false
   },  
-  end: {
-    type: DataTypes.DATE,
+  period: {
+    type: DataTypes.STRING,
     allowNull: false
   }
 }, {
