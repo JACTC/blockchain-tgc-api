@@ -2,7 +2,7 @@ const express = require('express')
 const db = require('./models/index')
 const { rsvp } = require('./models')
 const QRCode= require('qrcode')
-const main_url = "https://v57nr3jh-3000.uks1.devtunnels.ms/"
+const main_url = "https://v57nr3jh-3000.uks1.devtunnels.ms"
 
 // Solana pay imports
 const { clusterApiUrl, Connection, Keypair, PublicKey, Transaction } = require('@solana/web3.js')
@@ -164,55 +164,87 @@ app.get('/label.svg', (req, res)=>{
 
 app.post('/', async (req,res)=>{
 try {
+    // We pass the selected items in the query, calculate the expected cost
+    const amount = calculatePrice(req.params.id)
+    if (amount.toNumber() === 0) {
+      res.status(400).send({ error: "Can't checkout with charge of 0" })
+      return
+    }
 
-        
-        const reference = req.query.id
-        if(!reference) throw new Error('no reference')
-        //let reference_keypair = new Keypair() 
-    
-    // Account provided in the transaction request body by the wallet.
-        const accountField = req.body.account;
-        if (!accountField) throw new Error('missing account');
-    
-        const sender = new PublicKey(accountField);
-        console.log(sender)
-    
-        // create spl transfer instruction
-    
-        const splTransferIx = await createSplTransferIx(sender);
-    
-    
-        splTransferIx.keys.push({
-            pubkey: new PublicKey().publicKey,
-            isSigner: false,
-            isWritable: false,
-          })
-        // create the transaction
-        const transaction = new Transaction();
-    
-        
-        // add the instruction to the transaction
-        transaction.add(splTransferIx);
-    
-        let blockhash = (await connection.getLatestBlockhash('finalized')).blockhash;
-        transaction.recentBlockhash = blockhash;
-        transaction.feePayer = MERCHANT_WALLET
-    
-    
-        // Serialize and return the unsigned transaction.
-        const serializedTransaction = transaction.serialize({
-            verifySignatures: false,
-            requireAllSignatures: false,
-        });
-    
-        const base64Transaction = serializedTransaction.toString('base64');
-        const message = 'Thank you for your Reservation of a fishtank';
-    
-        res.status(200).send({ transaction: base64Transaction, message });
-} catch (error) {
-    res.sendStatus(500)
-    console.log(error)
-}
+    // We pass the reference to use in the query
+    const reference  = req.params.id
+    if (!reference) {
+      res.status(400).send({ error: "No reference provided" })
+      return
+    }
+
+    // We pass the buyer's public key in JSON body
+    const account  = req.body.account
+    if (!account) {
+      res.status(400).send({ error: "No account provided" })
+      return
+    }
+    const buyerPublicKey = new PublicKey(account)
+    const shopPublicKey = MERCHANT_WALLET
+
+
+    // Get details about the USDC token
+    const Mint = await getMint(connection, splToken)
+    // Get the buyer's USDC token account address
+    const buyerUsdcAddress = await getAssociatedTokenAddress(splToken, buyerPublicKey)
+    // Get the shop's USDC token account address
+    const shopUsdcAddress = await getAssociatedTokenAddress(splToken, shopPublicKey)
+
+    // Get a recent blockhash to include in the transaction
+    const { blockhash } = await (connection.getLatestBlockhash('finalized'))
+
+    const transaction = new Transaction({
+      recentBlockhash: blockhash,
+      // The buyer pays the transaction fee
+      feePayer: buyerPublicKey,
+    })
+
+    // Create the instruction to send USDC from the buyer to the shop
+    const transferInstruction = createTransferCheckedInstruction(
+      buyerUsdcAddress, // source
+      usdcAddress, // mint (token address)
+      shopUsdcAddress, // destination
+      buyerPublicKey, // owner of source address
+      amount.toNumber() * (10 ** Mint.decimals), // amount to transfer (in units of the USDC token)
+      Mint.decimals, // decimals of the USDC token
+    )
+
+    // Add the reference to the instruction as a key
+    // This will mean this transaction is returned when we query for the reference
+    transferInstruction.keys.push({
+      pubkey: new PublicKey(reference),
+      isSigner: false,
+      isWritable: false,
+    })
+
+    // Add the instruction to the transaction
+    transaction.add(transferInstruction)
+
+    // Serialize the transaction and convert to base64 to return it
+    const serializedTransaction = transaction.serialize({
+      // We will need the buyer to sign this transaction after it's returned to them
+      requireAllSignatures: false
+    })
+    const base64 = serializedTransaction.toString('base64')
+
+    // Insert into database: reference, amount
+
+    // Return the serialized transaction
+    res.send({
+      transaction: base64,
+      message: "Thanks for your order! 🍪",
+    })
+  } catch (err) {
+    console.error(err);
+
+    res.status(500).send({ error: 'error creating transaction', })
+    return
+  }
 });
 
 
@@ -276,6 +308,14 @@ function calculateCheckoutAmount() {
     return amount;
 }
 
+
+
+
+function calculatePrice() {
+    let amount = '5'
+    
+    return amount;
+}
 // TODO: Checkout calculatibng and calculateCheckoutAmount(), reservation handeling
 // maybe periods instaed of times?
 
@@ -288,7 +328,7 @@ function calculateCheckoutAmount() {
 //  alter: true
 db.sequelize.sync({force: true}).then(()=>{
     app.listen(3000, ()=>{
-        console.log('http://localhost:3000')
+        console.log(main_url)
     })
 })
 
