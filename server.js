@@ -2,7 +2,7 @@ const express = require('express')
 const db = require('./models/index')
 const { rsvp } = require('./models')
 const QRCode= require('qrcode')
-
+const main_url = "https://v57nr3jh-3000.uks1.devtunnels.ms/"
 
 // Solana pay imports
 const { clusterApiUrl, Connection, Keypair, PublicKey, Transaction } = require('@solana/web3.js')
@@ -28,7 +28,6 @@ const MERCHANT_WALLET = new PublicKey('Annf2Hqk8xsfRQcGL3j4WRQXJhx4umM3uV4jv56qz
 
 const app = express()
 
-app.set('view engine', 'ejs')
 app.use(express.json())
 
 
@@ -60,15 +59,28 @@ app.get('/lol', (req, res)=>{
 
 
 app.get('/api/get/fishtank/:id', async (req, res)=>{
-    const fishtanks = ['1','2','3','4']
     try {
-        const reservations = await rsvp.findAll({where:{ fishtank:req.params.id}})
+        const reservations = await db.rsvp.findAndCountAll({where:{ fishtank:req.params.id, date:req.header("date")}, raw: true })
+        let result = []
+        let count = await reservations.count
+        console.log(await reservations.count)
+        await reservations.rows.forEach(async (rows, i) => {
+            result.push({
+                period: await reservations.rows[i].period,
+                wallet: await reservations.rows[i].wallet,
+            })
+            console.log(result)
+            
+        })
+    res.send(await result)
+
+        
     } catch (error) {
         console.log(error)
     }
 
 
-    res.send(reservations)
+    
 })
 
 
@@ -101,7 +113,7 @@ app.post('/api/post/checkout/:id',  async (req, res)=>{
 app.post('/api/post/rsvp', async (req, res)=> {
 
     try {
-        const reservation = await db.rsvp.create({ name: req.body.name, wallet:req.body.wallet, hash:req.body.hash, fishtank:req.body.fishtank, start:req.body.start, end:req.body.end})
+        const reservation = await db.rsvp.create({ name: req.body.name, wallet:req.body.wallet, hash:req.body.hash, fishtank:req.body.fishtank, date:req.body.date, period:req.body.period})
     } catch (error) {
         console.log(error)
     }
@@ -120,13 +132,13 @@ app.post('/api/post/checkout', async (req, res)=> {
 
         const checkout = await db.checkout.create({ fishtank:req.body.fishtank, date:req.body.date, period:req.body.period})
 
-        let url = encodeURL({link:'https://v57nr3jh-3000.uks1.devtunnels.ms/?id=' + checkout.checkoutId})
+        let url = encodeURL({link:main_url + '?id=' + checkout.checkoutId})
 
        //let qr = createQR(url, 512, 'white', 'black').download(__dirname + '/files/qrcodes/' + checkout.checkoutId + '.svg')
         QRCode.toFile(__dirname +'/files/qrcodes/' + checkout.checkoutId + '.png', url.href, { errorCorrectionLevel: 'M' })
 
 
-        res.send({ checkoutId:checkout.checkoutId, qr:'https://v57nr3jh-3000.uks1.devtunnels.ms' + '/files/qrcodes/' + checkout.checkoutId + '.png', url:url })
+        res.send({ checkoutId:checkout.checkoutId, qr: main_url + '/files/qrcodes/' + checkout.checkoutId + '.png', url:url })
     } catch (error) {
         console.log(error)
         res.sendStatus(500)
@@ -140,7 +152,7 @@ app.post('/api/post/checkout', async (req, res)=> {
 // Solana pay
 
 app.get('/', (req, res)=>{
-    const icon = 'https://https://v57nr3jh-3000.uks1.devtunnels.ms/label.svg'
+    const icon = main_url + '/label.svg'
     res.send({"label":"Fishtanks Reservations", "icon":icon})
 })
 
@@ -154,9 +166,9 @@ app.post('/', async (req,res)=>{
 try {
 
         
-        const reference = req.query.id.toString()
+        const reference = req.query.id
         if(!reference) throw new Error('no reference')
-
+        //let reference_keypair = new Keypair() 
     
     // Account provided in the transaction request body by the wallet.
         const accountField = req.body.account;
@@ -171,7 +183,7 @@ try {
     
     
         splTransferIx.keys.push({
-            pubkey: new PublicKey(reference),
+            pubkey: new PublicKey().publicKey,
             isSigner: false,
             isWritable: false,
           })
@@ -201,7 +213,7 @@ try {
     res.sendStatus(500)
     console.log(error)
 }
-})
+});
 
 
 
@@ -246,7 +258,7 @@ async function createSplTransferIx(sender) {
     );
 
     // Create a reference that is unique to each checkout session
-    const references = [new Keypair().publicKey];
+    const references = [new Keypair()];
 
     // add references to the instruction
     for (const pubkey of references) {
