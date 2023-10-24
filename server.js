@@ -3,6 +3,7 @@ const db = require('./models/index')
 const { rsvp } = require('./models')
 const QRCode= require('qrcode')
 const main_url = "https://v57nr3jh-3000.uks1.devtunnels.ms"
+const base58 = require('base-58')
 
 // Solana pay imports
 const { clusterApiUrl, Connection, Keypair, PublicKey, Transaction } = require('@solana/web3.js')
@@ -164,31 +165,35 @@ app.get('/label.svg', (req, res)=>{
 
 app.post('/', async (req,res)=>{
 try {
-    // We pass the selected items in the query, calculate the expected cost
-    const amount = calculatePrice(req.params.id)
-    if (amount.toNumber() === 0) {
-      res.status(400).send({ error: "Can't checkout with charge of 0" })
-      return
-    }
 
     // We pass the reference to use in the query
-    const reference  = req.params.id
+    const reference  = req.query.id
     if (!reference) {
       res.status(400).send({ error: "No reference provided" })
-      return
+      return console.log('No reference')
     }
+
+
+    // We pass the selected items in the query, calculate the expected cost
+    const amount = await calculatePrice(reference)
+    if (!amount) {
+      res.status(400).send({ error: "No checkout detected" })
+      return console.log('No checkout reference')
+    }
+
+
 
     // We pass the buyer's public key in JSON body
     const account  = req.body.account
     if (!account) {
       res.status(400).send({ error: "No account provided" })
-      return
+      return console.log('No account provided')
     }
     const buyerPublicKey = new PublicKey(account)
     const shopPublicKey = MERCHANT_WALLET
 
 
-    // Get details about the USDC token
+    // Get details about the token
     const Mint = await getMint(connection, splToken)
     // Get the buyer's USDC token account address
     const buyerUsdcAddress = await getAssociatedTokenAddress(splToken, buyerPublicKey)
@@ -196,28 +201,29 @@ try {
     const shopUsdcAddress = await getAssociatedTokenAddress(splToken, shopPublicKey)
 
     // Get a recent blockhash to include in the transaction
-    const { blockhash } = await (connection.getLatestBlockhash('finalized'))
-
+    const lastblock = await connection.getLatestBlockhash('finalized')
     const transaction = new Transaction({
-      recentBlockhash: blockhash,
+      blockhash: lastblock.blockhash,
       // The buyer pays the transaction fee
       feePayer: buyerPublicKey,
+      lastValidBlockHeight: lastblock.lastValidBlockHeight
     })
 
     // Create the instruction to send USDC from the buyer to the shop
     const transferInstruction = createTransferCheckedInstruction(
       buyerUsdcAddress, // source
-      usdcAddress, // mint (token address)
+      splToken, // mint (token address)
       shopUsdcAddress, // destination
       buyerPublicKey, // owner of source address
-      amount.toNumber() * (10 ** Mint.decimals), // amount to transfer (in units of the USDC token)
-      Mint.decimals, // decimals of the USDC token
+      amount, // amount to transfer (in units of the USDC token)
+      1, // decimals of the USDC token
     )
 
     // Add the reference to the instruction as a key
     // This will mean this transaction is returned when we query for the reference
+    const pubkey = new Keypair().publicKey
     transferInstruction.keys.push({
-      pubkey: new PublicKey(reference),
+      pubkey: pubkey,
       isSigner: false,
       isWritable: false,
     })
@@ -226,7 +232,7 @@ try {
     transaction.add(transferInstruction)
 
     // Serialize the transaction and convert to base64 to return it
-    const serializedTransaction = transaction.serialize({
+    const serializedTransaction =  transaction.serialize({
       // We will need the buyer to sign this transaction after it's returned to them
       requireAllSignatures: false
     })
@@ -240,7 +246,7 @@ try {
       message: "Thanks for your order! 🍪",
     })
   } catch (err) {
-    console.error(err);
+    console.log(err);
 
     res.status(500).send({ error: 'error creating transaction', })
     return
@@ -249,70 +255,12 @@ try {
 
 
 
-
-
-async function createSplTransferIx(sender) {
-    //const senderInfo = await connection.getAccountInfo(sender);
-    //if (!senderInfo) throw new Error('sender not found');
-
-    // Get the sender's ATA and check that the account exists and can send tokens
-    const senderATA = await getAssociatedTokenAddress(splToken, sender);
-    const senderAccount = await getAccount(connection, senderATA);
-    if (!senderAccount.isInitialized) throw new Error('sender not initialized');
-    if (senderAccount.isFrozen) throw new Error('sender frozen');
-
-    // Get the merchant's ATA and check that the account exists and can receive tokens
-    const merchantATA = await getAssociatedTokenAddress(splToken, MERCHANT_WALLET);
-    const merchantAccount = await getAccount(connection, merchantATA);
-    if (!merchantAccount.isInitialized) throw new Error('merchant not initialized');
-    if (merchantAccount.isFrozen) throw new Error('merchant frozen');
-
-    // Check that the token provided is an initialized mint
-    const mint = await getMint(connection, splToken);
-    if (!mint.isInitialized) throw new Error('mint not initialized');
-
-    // You should always calculate the order total on the server to prevent
-    // people from directly manipulating the amount on the client
-    let amount = calculateCheckoutAmount();
-
-    // Check that the sender has enough tokens
-    //const tokens = BigInt(String(amount));
-    //if (tokens > senderAccount.amount) throw new Error('insufficient funds');
-    if (amount.toString() > senderAccount.amount) throw new Error('insufficient funds');
-    // Create an instruction to transfer SPL tokens, asserting the mint and decimals match
-    const splTransferIx = createTransferCheckedInstruction(
-        senderATA,
-        splToken,
-        merchantATA,
-        sender,
-        amount,
-        mint.decimals
-    );
-
-    // Create a reference that is unique to each checkout session
-    const references = [new Keypair()];
-
-    // add references to the instruction
-    for (const pubkey of references) {
-        splTransferIx.keys.push({ pubkey, isWritable: false, isSigner: false });
-    }
-
-    return splTransferIx;
-}
-
-
-
-function calculateCheckoutAmount() {
-    let amount = 5
+async function calculatePrice(id) {
+    let checkout = await db.checkout.findOne({where:{checkoutId:id}})
     
-    return amount;
-}
-
-
-
-
-function calculatePrice() {
-    let amount = '5'
+    let amount = 5
+    if (!await checkout){amount = null}
+    
     
     return amount;
 }
