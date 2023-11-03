@@ -12,9 +12,8 @@ const rsvp = sequelize.define('rsvp', {
     type: DataTypes.STRING,
     allowNull: false
   },
-  hash: {
-    type: DataTypes.STRING,
-    allowNull: false
+  pubkey: {
+    type: DataTypes.STRING
   },  
   wallet: {
     type: DataTypes.STRING,

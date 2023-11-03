@@ -17,8 +17,15 @@ const checkout = sequelize.define('checkout', {
     allowNull: false
   },
   period:{
-    type: DataTypes.DATEONLY,
+    type: DataTypes.STRING,
     allowNull: false
+  },
+  status:{
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  pubkey:{
+    type: DataTypes.STRING
   }
 }, {
 //  // Other model options go here

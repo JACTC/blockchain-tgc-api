@@ -3,13 +3,14 @@ const db = require('./models/index')
 const { rsvp } = require('./models')
 const QRCode= require('qrcode')
 const main_url = "https://v57nr3jh-3000.uks1.devtunnels.ms"
-const base58 = require('base-58')
+const fs = require('fs/promises')
+const config = require('./config.json')
 
 // Solana pay imports
 const { clusterApiUrl, Connection, Keypair, PublicKey, Transaction } = require('@solana/web3.js')
 const BigNumber = require('bignumber.js')
-const { createTransferCheckedInstruction, getAccount, getAssociatedTokenAddress, getMint, getOrCreateAssociatedTokenAccount } = require('@solana/spl-token')
-const { TEN, encodeURL, createQR } = require('@solana/pay')
+const { createTransferCheckedInstruction, getAccount, getAssociatedTokenAddress, getMint, getOrCreateAssociatedTokenAccount, amountToUiAmount } = require('@solana/spl-token')
+const { TEN, encodeURL, findReference, validateTransfer, FindReferenceError, ValidateTransferError } = require('@solana/pay')
 const { dirname } = require('path')
 
 
@@ -23,6 +24,7 @@ const connection = new Connection(endpoint, 'confirmed');
 //Token
 const splToken = new PublicKey('DwWQHDiyLauoh3pUih7X6G1TrqQnAjgpZ1W7ufrJQcb9');
 //wallet
+const MERCHANT_KEYPAIR = Keypair.fromSecretKey(new Uint8Array(config.pkey))
 const MERCHANT_WALLET = new PublicKey('Annf2Hqk8xsfRQcGL3j4WRQXJhx4umM3uV4jv56qzWMK');
 
 // 6NhgBfVm9imA1h6Kd8HabdbiRAXf77Xcxh189dHZHMwx
@@ -30,6 +32,16 @@ const MERCHANT_WALLET = new PublicKey('Annf2Hqk8xsfRQcGL3j4WRQXJhx4umM3uV4jv56qz
 const app = express()
 
 app.use(express.json())
+
+
+app.use(function(req, res, next) {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+    next();
+  });
+
+
+
 
 
 app.get('/rsvp/:tank', (req, res)=>{
@@ -90,27 +102,13 @@ app.get('/files/qrcodes/:file', (req,res)=>{
         res.sendFile(__dirname +'/files/qrcodes/' + req.params.file) 
     } catch (error) {
      console.log(error)   
-     res.sendStatus(400)
+     res.send({error:"No reference found"})
     }
 })
 
 
 
-
-app.post('/api/post/checkout/:id',  async (req, res)=>{
-    let fishtank = req.query.tank
-    let period = req.query.period
-    let date = req.query.date
-    let new_date = new Date(date)
-    console.log(new_date)
-    if(!fishtank || !period || !date || !new_date){ return res.sendStatus(400)}
-
-    if(new_date.getUTCMilliseconds() <= new Date.now()){ return res.sendStatus(400)}
-
-    res.sendStatus(200)
-})
-
-
+// TESTING
 app.post('/api/post/rsvp', async (req, res)=> {
 
     try {
@@ -122,16 +120,17 @@ app.post('/api/post/rsvp', async (req, res)=> {
     res.sendStatus(200)
 })
 
+// ^^^ TESTING
+
 
 app.post('/api/post/checkout', async (req, res)=> {
     
     try {
-
         let check_period_checkout = await db.checkout.findOne({ where: { period: req.body.period, fishtank: req.body.fishtank, date:req.body.date}})
         let check_period_rsvp = await db.rsvp.findOne({ where: { period: req.body.period, fishtank: req.body.fishtank, date:req.body.date}})
         if(check_period_checkout || check_period_rsvp){ return res.sendStatus(400); }
 
-        const checkout = await db.checkout.create({ fishtank:req.body.fishtank, date:req.body.date, period:req.body.period})
+        const checkout = await db.checkout.create({ fishtank:req.body.fishtank, date:req.body.date, period:req.body.period, status:'started'})
 
         let url = encodeURL({link:main_url + '?id=' + checkout.checkoutId})
 
@@ -139,7 +138,7 @@ app.post('/api/post/checkout', async (req, res)=> {
         QRCode.toFile(__dirname +'/files/qrcodes/' + checkout.checkoutId + '.png', url.href, { errorCorrectionLevel: 'M' })
 
 
-        res.send({ checkoutId:checkout.checkoutId, qr: main_url + '/files/qrcodes/' + checkout.checkoutId + '.png', url:url })
+        res.send({ checkoutId:checkout.checkoutId, qr: main_url + '/files/qrcodes/' + checkout.checkoutId + '.png', url:'solana:' + main_url + '?id=' + checkout.checkoutId, url2:url })
     } catch (error) {
         console.log(error)
         res.sendStatus(500)
@@ -153,12 +152,12 @@ app.post('/api/post/checkout', async (req, res)=> {
 // Solana pay
 
 app.get('/', (req, res)=>{
-    const icon = main_url + '/label.svg'
+    const icon = main_url + '/logo.png'
     res.send({"label":"Fishtanks Reservations", "icon":icon})
 })
 
-app.get('/label.svg', (req, res)=>{
-    res.sendFile(__dirname + '/files/icon.svg')
+app.get('/logo.png', (req, res)=>{
+    res.sendFile(__dirname + '/files/logo.png')
 })
 
 
@@ -198,14 +197,15 @@ try {
     // Get the buyer's USDC token account address
     const buyerUsdcAddress = await getAssociatedTokenAddress(splToken, buyerPublicKey)
     // Get the shop's USDC token account address
-    const shopUsdcAddress = await getAssociatedTokenAddress(splToken, shopPublicKey)
+    const shopAddress = await getAssociatedTokenAddress(splToken, shopPublicKey)
+    const feepayerAccount = await getAccount(connection, MERCHANT_KEYPAIR.publicKey)
 
     // Get a recent blockhash to include in the transaction
     const lastblock = await connection.getLatestBlockhash('finalized')
     const transaction = new Transaction({
       blockhash: lastblock.blockhash,
       // The buyer pays the transaction fee
-      feePayer: buyerPublicKey,
+      feePayer: MERCHANT_KEYPAIR.publicKey,
       lastValidBlockHeight: lastblock.lastValidBlockHeight
     })
 
@@ -213,7 +213,7 @@ try {
     const transferInstruction = createTransferCheckedInstruction(
       buyerUsdcAddress, // source
       splToken, // mint (token address)
-      shopUsdcAddress, // destination
+      shopAddress, // destination
       buyerPublicKey, // owner of source address
       amount, // amount to transfer (in units of the USDC token)
       1, // decimals of the USDC token
@@ -227,7 +227,6 @@ try {
       isSigner: false,
       isWritable: false,
     })
-
     // Add the instruction to the transaction
     transaction.add(transferInstruction)
 
@@ -239,7 +238,7 @@ try {
     const base64 = serializedTransaction.toString('base64')
 
     // Insert into database: reference, amount
-
+    await db.checkout.update({status: 'pending', pubkey:pubkey.toString()},{ where: {checkoutId: req.query.id}})
     // Return the serialized transaction
     res.send({
       transaction: base64,
@@ -264,9 +263,96 @@ async function calculatePrice(id) {
     
     return amount;
 }
-// TODO: Checkout calculatibng and calculateCheckoutAmount(), reservation handeling
-// maybe periods instaed of times?
 
+
+
+
+async function checkstatus(){
+    try {
+
+
+        // 10 min = 600000 // 40 sec = 40000
+        let time = 600000
+
+
+
+        // Started
+        let started = await db.checkout.findAndCountAll({where:{status: 'started'}, raw:true})
+        await started.rows.forEach(async (rows, i) => {
+    
+            let now = Date.now()
+            if(now - new Date(await started.rows[i].createdAt).getTime() >= time ){
+                await db.checkout.destroy({where:{checkoutId: await started.rows[i].checkoutId}});
+                console.log(await started.rows[i].checkoutId + ' Deleted');
+                await fs.rm(__dirname + '/files/qrcodes/' + await started.rows[i].checkoutId + '.png')
+            };
+            
+        }) 
+
+        // Pending
+        let pending = await db.checkout.findAndCountAll({where:{status: 'pending'}, raw:true})
+        await pending.rows.forEach(async (rows, i) => {
+            
+                try {
+                    let amount = await calculatePrice(await pending.rows[i].checkoutId)
+
+                    if (!amount){return}
+
+                    let reference = new PublicKey(await pending.rows[i].pubkey)
+                    // Check if there is any transaction for the reference
+                    const signatureInfo = await findReference(connection, reference, { finality: 'confirmed' })
+                    // Validate that the transaction has the expected recipient, amount and SPL token
+                    await validateTransfer(
+                      connection,
+                      signatureInfo.signature,
+                      {
+                        recipient: await getAssociatedTokenAddress(splToken, MERCHANT_WALLET),
+                        amount,
+                        splToken: splToken,
+                        reference,
+                      },
+                      { commitment: 'confirmed' }
+                    ).then(
+                        await db.rsvp.create({ name: req.body.name, wallet:req.body.wallet, hash:req.body.hash, fishtank:req.body.fishtank, date:req.body.date, period:req.body.period})
+                    )
+                
+
+                } catch (e) {
+                    if(e instanceof FindReferenceError){
+                        return
+                    }
+
+                    if (e instanceof ValidateTransferError) {
+                        // Transaction is invalid
+                        console.log('Transaction is invalid', e)
+                        return;
+                    }
+
+                    console.log(e)
+
+                }
+
+
+
+            
+            let now = Date.now()
+            if(now - new Date(await pending.rows[i].createdAt).getTime() >= time ){
+                await db.checkout.destroy({where:{checkoutId: await pending.rows[i].checkoutId}});
+                console.log(await pending.rows[i].checkoutId + ' Deleted');
+                await fs.rm(__dirname + '/files/qrcodes/' + await pending.rows[i].checkoutId + '.png')
+            };
+
+        }) 
+
+    } catch (err) {
+        console.log(err)
+        
+    }
+
+
+    setTimeout(arguments.callee, 10000)
+    
+}
 
 
 
@@ -277,6 +363,7 @@ async function calculatePrice(id) {
 db.sequelize.sync({force: true}).then(()=>{
     app.listen(3000, ()=>{
         console.log(main_url)
+        checkstatus()
     })
 })
 
