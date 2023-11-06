@@ -361,7 +361,7 @@ async function checkstatus(){
 
 //  alter: true
 db.sequelize.sync({force: true}).then(()=>{
-    app.listen(3000, ()=>{
+    app.listen(config.port, ()=>{
         console.log(main_url)
         checkstatus()
     })

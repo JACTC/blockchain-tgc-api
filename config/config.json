@@ -1,14 +1,23 @@
 {
   "development": {
-    "storage": "./data.db",
-    "dialect": "sqlite"
+    "username": "u27_XxdFxEUE1Q",
+    "password": "EBUa4lcLTZSt4MC!^.3JaKsw",
+    "database": "s27_main",
+    "host": "143.47.44.82",
+    "dialect": "mariadb"
   },
   "test": {
-    "storage": "./data.db",
-    "dialect": "sqlite"
+    "username": "u27_XxdFxEUE1Q",
+    "password": "EBUa4lcLTZSt4MC!^.3JaKsw",
+    "database": "s27_main",
+    "host": "143.47.44.82",
+    "dialect": "mariadb"
   },
   "production": {
-    "storage": "./data.db",
-    "dialect": "sqlite"
+    "username": "u27_XxdFxEUE1Q",
+    "password": "EBUa4lcLTZSt4MC!^.3JaKsw",
+    "database": "s27_main",
+    "host": "143.47.44.82",
+    "dialect": "mariadb"
   }
 }
