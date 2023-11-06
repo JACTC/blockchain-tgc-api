@@ -1,23 +1,23 @@
 {
   "development": {
-    "username": "u27_XxdFxEUE1Q",
-    "password": "EBUa4lcLTZSt4MC!^.3JaKsw",
-    "database": "s27_main",
-    "host": "143.47.44.82",
+    "username": "",
+    "password": "",
+    "database": "",
+    "host": "",
     "dialect": "mariadb"
   },
   "test": {
-    "username": "u27_XxdFxEUE1Q",
-    "password": "EBUa4lcLTZSt4MC!^.3JaKsw",
-    "database": "s27_main",
-    "host": "143.47.44.82",
+    "username": "",
+    "password": "",
+    "database": "",
+    "host": "",
     "dialect": "mariadb"
   },
   "production": {
-    "username": "u27_XxdFxEUE1Q",
-    "password": "EBUa4lcLTZSt4MC!^.3JaKsw",
-    "database": "s27_main",
-    "host": "143.47.44.82",
+    "username": "",
+    "password": "",
+    "database": "",
+    "host": "",
     "dialect": "mariadb"
   }
 }
