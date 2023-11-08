@@ -1,6 +1,5 @@
 const express = require('express')
 const db = require('./models/index')
-const { rsvp } = require('./models')
 const QRCode= require('qrcode')
 const main_url = "https://v57nr3jh-3000.uks1.devtunnels.ms"
 const fs = require('fs/promises')
@@ -11,7 +10,6 @@ const { clusterApiUrl, Connection, Keypair, PublicKey, Transaction } = require('
 const BigNumber = require('bignumber.js')
 const { createTransferCheckedInstruction, getAccount, getAssociatedTokenAddress, getMint, getOrCreateAssociatedTokenAccount, amountToUiAmount } = require('@solana/spl-token')
 const { TEN, encodeURL, findReference, validateTransfer, FindReferenceError, ValidateTransferError } = require('@solana/pay')
-const { dirname } = require('path')
 
 
 
@@ -25,8 +23,9 @@ const connection = new Connection(endpoint, 'confirmed');
 const splToken = new PublicKey('DwWQHDiyLauoh3pUih7X6G1TrqQnAjgpZ1W7ufrJQcb9');
 //wallet
 const MERCHANT_KEYPAIR = Keypair.fromSecretKey(new Uint8Array(config.pkey))
-const MERCHANT_WALLET = new PublicKey('Annf2Hqk8xsfRQcGL3j4WRQXJhx4umM3uV4jv56qzWMK');
+const MERCHANT_WALLET = new PublicKey(MERCHANT_KEYPAIR.publicKey)
 
+// Annf2Hqk8xsfRQcGL3j4WRQXJhx4umM3uV4jv56qzWMK
 // 6NhgBfVm9imA1h6Kd8HabdbiRAXf77Xcxh189dHZHMwx
 
 const app = express()
@@ -74,16 +73,19 @@ app.get('/lol', (req, res)=>{
 app.get('/api/get/fishtank/:id', async (req, res)=>{
     try {
         const reservations = await db.rsvp.findAndCountAll({where:{ fishtank:req.params.id, date:req.header("date")}, raw: true })
+        const checkouts = await db.checkout.findAndCountAll({where:{ fishtank:req.params.id, date:req.header("date")}, raw: true })
         let result = []
-        let count = await reservations.count
-        console.log(await reservations.count)
         await reservations.rows.forEach(async (rows, i) => {
             result.push({
                 period: await reservations.rows[i].period,
                 wallet: await reservations.rows[i].wallet,
+            })  
+        })
+        await checkouts.rows.forEach(async (rows, i) => {
+            result.push({
+                period: await reservations.rows[i].period,
+                wallet: await reservations.rows[i].wallet,
             })
-            console.log(result)
-            
         })
     res.send(await result)
 
@@ -205,7 +207,7 @@ try {
     const transaction = new Transaction({
       blockhash: lastblock.blockhash,
       // The buyer pays the transaction fee
-      feePayer: MERCHANT_KEYPAIR.publicKey,
+      feePayer: shopPublicKey,
       lastValidBlockHeight: lastblock.lastValidBlockHeight
     })
 
@@ -230,11 +232,13 @@ try {
     // Add the instruction to the transaction
     transaction.add(transferInstruction)
 
+    transaction.partialSign([shopAddress])
     // Serialize the transaction and convert to base64 to return it
     const serializedTransaction =  transaction.serialize({
       // We will need the buyer to sign this transaction after it's returned to them
       requireAllSignatures: false
     })
+    
     const base64 = serializedTransaction.toString('base64')
 
     // Insert into database: reference, amount
@@ -364,6 +368,7 @@ db.sequelize.sync({force: true}).then(()=>{
     app.listen(config.port, ()=>{
         console.log(main_url)
         checkstatus()
+        console.log('Started!')
     })
 })
 
