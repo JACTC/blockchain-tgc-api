@@ -2,5 +2,7 @@
     "__comment_1":"Private key in unit8 array",
     "pkey":[],
     "__comment_2":"Port for the backend",
-    "port":3000
+    "port":3000,
+    "__comment_3":"Url of  the server",
+    "url":""
 }

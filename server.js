@@ -1,9 +1,10 @@
 const express = require('express')
 const db = require('./models/index')
 const QRCode= require('qrcode')
-const main_url = "https://v57nr3jh-3000.uks1.devtunnels.ms"
-const fs = require('fs/promises')
 const config = require('./config.json')
+const main_url = config.url
+const fs = require('fs/promises')
+
 
 // Solana pay imports
 const { clusterApiUrl, Connection, Keypair, PublicKey, Transaction } = require('@solana/web3.js')
