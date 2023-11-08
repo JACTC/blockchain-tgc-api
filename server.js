@@ -84,8 +84,8 @@ app.get('/api/get/fishtank/:id', async (req, res)=>{
         })
         await checkouts.rows.forEach(async (rows, i) => {
             result.push({
-                period: await reservations.rows[i].period,
-                wallet: await reservations.rows[i].wallet,
+                period: await checkouts.rows[i].period,
+                wallet: await checkouts.rows[i].wallet,
             })
         })
     res.send(await result)
