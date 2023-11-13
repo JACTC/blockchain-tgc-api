@@ -135,11 +135,16 @@ app.post('/api/post/rsvp', async (req, res)=> {
 app.post('/api/post/checkout', async (req, res)=> {
     
     try {
-        let check_period_checkout = await db.checkout.findOne({ where: { period: req.body.period, fishtank: req.body.fishtank, date:req.body.date}})
-        let check_period_rsvp = await db.rsvp.findOne({ where: { period: req.body.period, fishtank: req.body.fishtank, date:req.body.date}})
+        let parts = req.body.date.split("/");
+        let date = formatDate(new Date(parseInt(parts[2], 10),
+                  parseInt(parts[1], 10) - 1,
+                  parseInt(parts[0], 10)))
+
+        let check_period_checkout = await db.checkout.findOne({ where: { period: req.body.period, fishtank: req.body.fishtank, date:date}})
+        let check_period_rsvp = await db.rsvp.findOne({ where: { period: req.body.period, fishtank: req.body.fishtank, date:date}})
         if(check_period_checkout || check_period_rsvp){ return res.sendStatus(400); }
 
-        const checkout = await db.checkout.create({ fishtank:req.body.fishtank, date:req.body.date, period:req.body.period, status:'started'})
+        const checkout = await db.checkout.create({ fishtank:req.body.fishtank, date:date, period:req.body.period, status:'started'})
 
         let url = encodeURL({link:main_url + '?id=' + checkout.checkoutId})
 
