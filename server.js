@@ -73,8 +73,14 @@ app.get('/lol', (req, res)=>{
 
 app.get('/api/get/fishtank/:id', async (req, res)=>{
     try {
-        const reservations = await db.rsvp.findAndCountAll({where:{ fishtank:req.params.id, date:req.header("date")}, raw: true })
-        const checkouts = await db.checkout.findAndCountAll({where:{ fishtank:req.params.id, date:req.header("date")}, raw: true })
+        let parts = req.header("date").split("/");
+        let date = formatDate(new Date(parseInt(parts[2], 10),
+                  parseInt(parts[1], 10) - 1,
+                  parseInt(parts[0], 10)))
+                  
+        console.log(date)
+        const reservations = await db.rsvp.findAndCountAll({where:{ fishtank:req.params.id, date:date}, raw: true })
+        const checkouts = await db.checkout.findAndCountAll({where:{ fishtank:req.params.id, date:date}, raw: true })
         let result = []
         await reservations.rows.forEach(async (rows, i) => {
             result.push({
@@ -82,7 +88,7 @@ app.get('/api/get/fishtank/:id', async (req, res)=>{
                 wallet: await reservations.rows[i].wallet,
             })  
         })
-        await checkouts.rows.forEach(async (rows, i) => {
+        await checkouts.rows.forEach(async (rows ,i) => {
             result.push({
                 period: await checkouts.rows[i].period,
                 wallet: await checkouts.rows[i].wallet,
@@ -115,7 +121,7 @@ app.get('/files/qrcodes/:file', (req,res)=>{
 app.post('/api/post/rsvp', async (req, res)=> {
 
     try {
-        const reservation = await db.rsvp.create({ name: req.body.name, wallet:req.body.wallet, hash:req.body.hash, fishtank:req.body.fishtank, date:req.body.date, period:req.body.period})
+        await db.rsvp.create({ name: req.body.name, wallet:req.body.wallet, hash:req.body.hash, fishtank:req.body.fishtank, date:req.body.date, period:req.body.period})
     } catch (error) {
         console.log(error)
     }
@@ -208,7 +214,7 @@ try {
     const transaction = new Transaction({
       blockhash: lastblock.blockhash,
       // The buyer pays the transaction fee
-      feePayer: shopPublicKey,
+      feePayer: MERCHANT_KEYPAIR,
       lastValidBlockHeight: lastblock.lastValidBlockHeight
     })
 
@@ -233,7 +239,9 @@ try {
     // Add the instruction to the transaction
     transaction.add(transferInstruction)
 
-    transaction.partialSign([shopAddress])
+    
+    transaction.partialSign([MERCHANT_KEYPAIR])
+
     // Serialize the transaction and convert to base64 to return it
     const serializedTransaction =  transaction.serialize({
       // We will need the buyer to sign this transaction after it's returned to them
@@ -269,7 +277,19 @@ async function calculatePrice(id) {
     return amount;
 }
 
+function formatDate(date) {
+    var d = new Date(date),
+        month = '' + (d.getMonth() + 1),
+        day = '' + d.getDate(),
+        year = d.getFullYear();
 
+    if (month.length < 2) 
+        month = '0' + month;
+    if (day.length < 2) 
+        day = '0' + day;
+
+    return [year, month, day].join('-');
+}
 
 
 async function checkstatus(){
