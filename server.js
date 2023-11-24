@@ -6,10 +6,12 @@ const main_url = config.url
 const fs = require('fs/promises')
 const https = require('https')
 
-
-const options ={
-    key: fs.readFile('./config/key.key'), 
-    cert: fs.readFile('./config/cert.crt')
+async ()=>{
+    const options ={
+        key: await fs.readFile('./config/key.key'), 
+        cert: await fs.readFile('./config/cert.crt')
+    }
+    
 }
 
 
