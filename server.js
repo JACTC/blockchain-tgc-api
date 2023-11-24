@@ -4,13 +4,13 @@ const QRCode= require('qrcode')
 const config = require('./config.json')
 const main_url = config.url
 const fs = require('fs/promises')
-//const https = require('https')
+const https = require('https')
 
 
-/*const options ={
-    key: await fs.readFile('./config/ssl/key.key'), 
-    cert: await fs.readFile('./config/ssl/cert.crt')
-}*/
+const options ={
+    key: await fs.readFile('./config/key.key'), 
+    cert: await fs.readFile('./config/cert.crt')
+}
 
 
 // Solana pay imports
@@ -53,7 +53,7 @@ app.use(function(req, res, next) {
 
 
 
-//const server = https.createServer(options, app)
+const server = https.createServer(options, app)
 
 
 
