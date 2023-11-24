@@ -8,8 +8,8 @@ const https = require('https')
 
 
 const options ={
-    key: await fs.readFile('./config/key.key'), 
-    cert: await fs.readFile('./config/cert.crt')
+    key: fs.readFile('./config/key.key'), 
+    cert: fs.readFile('./config/cert.crt')
 }
 
 
