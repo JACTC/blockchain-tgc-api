@@ -432,10 +432,11 @@ async function checkstatus(){
 //  alter: true
 //{force: true}
 db.sequelize.sync().then(()=>{
-    app.listen(config.port, ()=>{
+    server.listen(config.port, ()=>{
         console.log(main_url)
         checkstatus()
         console.log('Started!')
     })
 })
+
 
