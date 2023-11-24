@@ -6,12 +6,12 @@ const main_url = config.url
 const fs = require('fs/promises')
 const https = require('https')
 
-async ()=>{
+async function options() {
     const options ={
         key: await fs.readFile('./config/key.key'), 
         cert: await fs.readFile('./config/cert.crt')
     }
-    
+    return options
 }
 
 
@@ -55,7 +55,7 @@ app.use(function(req, res, next) {
 
 
 
-const server = https.createServer(await options, app)
+const server = https.createServer(options(), app)
 
 
 
