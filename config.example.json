@@ -4,5 +4,8 @@
     "__comment_2":"Port for the backend",
     "port":3000,
     "__comment_3":"Url of  the server",
-    "url":""
+    "url":"",
+    "__comment_4":"Price of the transaction  (No floats, decimals are represented: 1 = 0.1 due to mint having only 1 decimal point)",
+    "price":1
+    
 }

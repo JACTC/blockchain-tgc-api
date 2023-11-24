@@ -4,9 +4,9 @@ const sequelize = new Sequelize('sqlite::memory:');
 module.exports = (sequelize, DataTypes) => {
 const rsvp = sequelize.define('rsvp', {
   // Model attributes are defined here
-  name: {
+  email: {
     type: DataTypes.STRING,
-    allowNull: false
+    allowNull: true
   },  
   fishtank: {
     type: DataTypes.STRING,
@@ -26,7 +26,12 @@ const rsvp = sequelize.define('rsvp', {
   period: {
     type: DataTypes.STRING,
     allowNull: false
-  }
+  },  
+  checkoutId: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },  
+
 }, {
 //  // Other model options go here
     sequelize, // We need to pass the connection instance

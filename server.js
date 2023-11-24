@@ -4,6 +4,13 @@ const QRCode= require('qrcode')
 const config = require('./config.json')
 const main_url = config.url
 const fs = require('fs/promises')
+//const https = require('https')
+
+
+/*const options ={
+    key: await fs.readFile('./config/ssl/key.key'), 
+    cert: await fs.readFile('./config/ssl/cert.crt')
+}*/
 
 
 // Solana pay imports
@@ -23,8 +30,11 @@ const connection = new Connection(endpoint, 'confirmed');
 //Token
 const splToken = new PublicKey('DwWQHDiyLauoh3pUih7X6G1TrqQnAjgpZ1W7ufrJQcb9');
 //wallet
-const MERCHANT_KEYPAIR = Keypair.fromSecretKey(new Uint8Array(config.pkey))
-const MERCHANT_WALLET = new PublicKey(MERCHANT_KEYPAIR.publicKey)
+const MERCHANT_KEYPAIR = Keypair.fromSecretKey(new Uint8Array(JSON.parse(config.pkey)))
+//const MERCHANT_WALLET = new PublicKey(MERCHANT_KEYPAIR.publicKey)
+const MERCHANT_WALLET = new PublicKey("FFzWfCaNva5R3FcmtADtxmbMA97rVhgM2GWhmzo2k5RB")
+
+
 
 // Annf2Hqk8xsfRQcGL3j4WRQXJhx4umM3uV4jv56qzWMK
 // 6NhgBfVm9imA1h6Kd8HabdbiRAXf77Xcxh189dHZHMwx
@@ -41,6 +51,9 @@ app.use(function(req, res, next) {
   });
 
 
+
+
+//const server = https.createServer(options, app)
 
 
 
@@ -140,6 +153,15 @@ app.post('/api/post/checkout', async (req, res)=> {
                   parseInt(parts[1], 10) - 1,
                   parseInt(parts[0], 10)))
 
+
+        const fechaProporcionada = new Date(date); fechaProporcionada.setHours(0, 0, 0, 0);  
+        const fechaActual = new Date(); fechaActual.setHours(0, 0, 0, 0);  
+        if (fechaProporcionada.getTime() < fechaActual.getTime()) {     
+        return res.sendStatus(400); 
+        } 
+
+
+
         let check_period_checkout = await db.checkout.findOne({ where: { period: req.body.period, fishtank: req.body.fishtank, date:date}})
         let check_period_rsvp = await db.rsvp.findOne({ where: { period: req.body.period, fishtank: req.body.fishtank, date:date}})
         if(check_period_checkout || check_period_rsvp){ return res.sendStatus(400); }
@@ -212,14 +234,14 @@ try {
     const buyerUsdcAddress = await getAssociatedTokenAddress(splToken, buyerPublicKey)
     // Get the shop's USDC token account address
     const shopAddress = await getAssociatedTokenAddress(splToken, shopPublicKey)
-    const feepayerAccount = await getAccount(connection, MERCHANT_KEYPAIR.publicKey)
+    const feepayerAccount = await getAssociatedTokenAddress(Mint.address, MERCHANT_KEYPAIR.publicKey)
 
     // Get a recent blockhash to include in the transaction
     const lastblock = await connection.getLatestBlockhash('finalized')
     const transaction = new Transaction({
       blockhash: lastblock.blockhash,
       // The buyer pays the transaction fee
-      feePayer: MERCHANT_KEYPAIR,
+      //feePayer: shopAddress,
       lastValidBlockHeight: lastblock.lastValidBlockHeight
     })
 
@@ -245,7 +267,7 @@ try {
     transaction.add(transferInstruction)
 
     
-    transaction.partialSign([MERCHANT_KEYPAIR])
+    transaction.sign(MERCHANT_KEYPAIR)
 
     // Serialize the transaction and convert to base64 to return it
     const serializedTransaction =  transaction.serialize({
@@ -275,7 +297,7 @@ try {
 async function calculatePrice(id) {
     let checkout = await db.checkout.findOne({where:{checkoutId:id}})
     
-    let amount = 5
+    let amount = config.price
     if (!await checkout){amount = null}
     
     
@@ -324,7 +346,7 @@ async function checkstatus(){
         await pending.rows.forEach(async (rows, i) => {
             
                 try {
-                    let amount = await calculatePrice(await pending.rows[i].checkoutId)
+                    let amount = await calculatePrice(await pending.rows[i].checkoutId)*0.1
 
                     if (!amount){return}
 
@@ -332,18 +354,34 @@ async function checkstatus(){
                     // Check if there is any transaction for the reference
                     const signatureInfo = await findReference(connection, reference, { finality: 'confirmed' })
                     // Validate that the transaction has the expected recipient, amount and SPL token
+
                     await validateTransfer(
                       connection,
                       signatureInfo.signature,
                       {
-                        recipient: await getAssociatedTokenAddress(splToken, MERCHANT_WALLET),
+                        recipient: MERCHANT_WALLET,//await getAssociatedTokenAddress(splToken, MERCHANT_WALLET, true,),
                         amount,
                         splToken: splToken,
                         reference,
+
                       },
                       { commitment: 'confirmed' }
-                    ).then(
-                        await db.rsvp.create({ name: req.body.name, wallet:req.body.wallet, hash:req.body.hash, fishtank:req.body.fishtank, date:req.body.date, period:req.body.period})
+                    ).then(async (value)=>{
+                        try {
+                            await db.rsvp.create({ wallet:await pending.rows[i].pubkey, checkoutId: await pending.rows[i].checkoutId, fishtank: await pending.rows[i].fishtank, date: await pending.rows[i].date, period: await pending.rows[i].period})
+                            await db.checkout.destroy({where:{checkoutId: await pending.rows[i].checkoutId}});
+                            await fs.rm(__dirname + '/files/qrcodes/' + await pending.rows[i].checkoutId + '.png')
+                            //email: pending.rows[i].email,
+                        } catch (error) {
+                            console.log(error)
+                            
+                        }
+                    }, (reason)=>{
+                        console.log(reason)
+                    }
+                        
+                        
+                    
                     )
                 
 
@@ -390,7 +428,8 @@ async function checkstatus(){
 
 
 //  alter: true
-db.sequelize.sync({force: true}).then(()=>{
+//{force: true}
+db.sequelize.sync().then(()=>{
     app.listen(config.port, ()=>{
         console.log(main_url)
         checkstatus()
