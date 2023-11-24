@@ -8,8 +8,8 @@ const https = require('https')
 
 
 const options ={
-    key: fs.readFile('./config/key.key'), 
-    cert: fs.readFile('./config/cert.crt')
+    key: await fs.readFile('./config/key.key'), 
+    cert: await fs.readFile('./config/cert.crt')
 }
 
 
@@ -53,7 +53,7 @@ app.use(function(req, res, next) {
 
 
 
-const server = https.createServer(options, app)
+const server = https.createServer(await options, app)
 
 
 
