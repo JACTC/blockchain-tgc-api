@@ -5,3 +5,4 @@ config/config.json
 data.db
 config/cert.crt
 config/key.key
+mintto.js
